@@ -32,13 +32,13 @@ def check_time_discipline(sim_hour, sim_minute, latest_msg, description):
         # 白天：绝对禁止说任何含睡的词
         if msg_type == "指令":
             tone = "接指令干活 ✅"
-            forbidden = "说'睡吧''晚安'等词 ❌"
+            forbidden = "说时间错位词 ❌"
         elif msg_type == "批评/纠正":
             tone = "认错+补救 ✅"
-            forbidden = "说'你先睡' ❌"
+            forbidden = "说时间错位词 ❌"
         elif msg_type == "对话/反馈":
             tone = "正常回应 ✅"
-            forbidden = "提睡觉 ❌"
+            forbidden = "提时间错位词 ❌"
         else:
             tone = "干活 ✅"
             forbidden = "不提休息 ❌"
@@ -49,11 +49,11 @@ def check_time_discipline(sim_hour, sim_minute, latest_msg, description):
             forbidden = ""
         else:
             tone = "接活（深夜发指令说明紧急）✅"
-            forbidden = "不说'明天再说' ❌"
+            forbidden = "不说明天再说 ❌"
     
     # 判断是否通过
     will_say_sleep_bad = False
-    if time_zone == "DAY" and ("睡" in tone or "晚安" in tone):
+    if time_zone == "DAY" and ("睡" in tone):
         will_say_sleep_bad = True
     
     return {
@@ -67,11 +67,11 @@ def check_time_discipline(sim_hour, sim_minute, latest_msg, description):
 
 # 测试用例
 test_cases = [
-    # 历史踩坑1：白天说"我睡觉了"后发新指令，AI回"睡吧鹏哥"
-    (14, 0, "去催一下，看看现在出几张了", "【历史踩坑】白天说'睡觉了'后发新指令，AI误回'睡吧鹏哥'"),
+    # 历史踩坑1：白天说"我睡觉了"后发新指令，AI误回时间错位词
+    (14, 0, "去催一下，看看现在出几张了", "【历史踩坑】白天说睡觉了后发新指令，AI误回时间错位词"),
     
-    # 历史踩坑2：白天拿压缩快照的"用户说睡觉了"当基调，AI回"你先睡"
-    (11, 45, "这睡吧，这个事儿就过不去了", "【历史踩坑】白天批评时AI回'你先睡'"),
+    # 历史踩坑2：白天拿压缩快照的"用户说睡觉了"当基调，AI回时间错位词
+    (11, 45, "这睡吧，这个事儿就过不去了", "【历史踩坑】白天批评时AI回时间错位词"),
     
     # 正确的边界情况
     (6, 0, "帮我查个东西", "【边界】早上6点整，用户发指令"),

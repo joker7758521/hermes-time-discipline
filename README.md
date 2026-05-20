@@ -1,8 +1,8 @@
 # Time Discipline for AI Agents
 
-**Stop your AI from saying "good night" in the middle of the day.**
+**Stop your AI from saying time-displaced words in the middle of the day.**
 
-A lightweight, objective clock-check system that prevents AI agents from making time-related mistakes — saying "sleep well" at 2 PM, pushing work to "tomorrow" at 11 AM, or using stale user messages as a proxy for the current time.
+A lightweight, objective clock-check system that prevents AI agents from making time-related mistakes — saying sleep-related words at 2 PM, pushing work to "tomorrow" at 11 AM, or using stale user messages as a proxy for the current time.
 
 ---
 
@@ -10,10 +10,7 @@ A lightweight, objective clock-check system that prevents AI agents from making 
 
 ### The Problem
 
-AI agents frequently say things like:
-- **"Good night, rest well!"** — at 2:00 PM in the afternoon
-- **"Let's pick this up tomorrow"** — at 11:45 AM, right after receiving new instructions
-- **"You should get some sleep"** — when the user just asked for help with a task
+AI agents frequently say time-displaced things — sleep-related words during daytime, deferring urgent tasks to "tomorrow" when the user just gave new instructions, or making assumptions about the user's state based on an old message.
 
 These aren't random hallucinations. They follow a predictable pattern.
 
@@ -23,7 +20,7 @@ These aren't random hallucinations. They follow a predictable pattern.
 AI's broken reasoning flow:
 1. Read context → find a user message "I'm going to sleep"
 2. Treat that old message as the user's "current state tag"
-3. Reply based on that tag → says "good night" during daytime
+3. Reply based on that tag → outputs time-displaced words during daytime
 
 Instead of the correct flow:
 1. Check system clock (what time is it NOW? Day or night?)
@@ -35,7 +32,7 @@ Instead of the correct flow:
 
 ### Why This Matters
 
-When an AI says "good night" at 2 PM, user trust drops immediately. It signals that the AI has no awareness of the real world — it's just pattern-matching on conversation history without grounding in objective reality. This is a safety and reliability issue for any AI agent deployed in production.
+When an AI says sleep-related words at 2 PM, user trust drops immediately. It signals that the AI has no awareness of the real world — it's just pattern-matching on conversation history without grounding in objective reality. This is a safety and reliability issue for any AI agent deployed in production.
 
 ---
 
@@ -49,7 +46,7 @@ Before every reply, execute this mandatory check in order. **Do not reply until 
 import datetime
 hour = datetime.datetime.now().hour
 if 6 <= hour < 22:
-    time_zone = "DAY"    # Daytime — absolutely NO sleep/good-night language
+    time_zone = "DAY"    # Daytime — absolutely NO sleep-related language
 else:
     time_zone = "NIGHT"  # Nighttime — sleep language may be appropriate
 ```
@@ -73,10 +70,10 @@ if [ "$HOUR" -ge 22 ] || [ "$HOUR" -lt 6 ]; then echo "NIGHT"; else echo "DAY"; 
 
 | Time | Latest Message | Correct Tone | Wrong Tone |
 |------|---------------|-------------|-----------|
-| Day (14:00) | "Check on this task" | Take the order, work | "Sleep well" ❌ |
-| Day (11:00) | Criticism + new instruction | Acknowledge + execute | "You go to sleep" ❌ |
+| Day (14:00) | "Check on this task" | Take the order, work | Sleep-related words ❌ |
+| Day (11:00) | Criticism + new instruction | Acknowledge + execute | Sleep-related words ❌ |
 | Night (23:30) | New instruction | Execute (urgent if sent at night) | "Let's do it tomorrow" ❌ |
-| Night (00:30) | User hasn't sent anything | Stay quiet / end naturally | Send "good night" unprompted ❌ |
+| Night (00:30) | User hasn't sent anything | Stay quiet / end naturally | Proactive sign-off ❌ |
 
 ### Core Mantra
 

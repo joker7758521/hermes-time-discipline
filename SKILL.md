@@ -17,14 +17,14 @@ category: ai-safety
 ## 🔍 根因分析
 
 ### 问题现象
-AI在白天回复"晚安"、"你先睡"、"明天再说"等时间错位的话。
+AI在白天回复含"睡/休息/晚安"等时间错位的话。
 
 ### 根本原因
 ```
 AI的推理流程是：
 1. 读取上下文 → 找到用户说过的一句话"我睡觉了"
 2. 把这句话当成"用户当前状态"标签
-3. 后续回复时带上这个标签 → 白天说晚安
+3. 后续回复时带上这个标签 → 白天输出时间错位词
 
 而不是：
 1. 查系统时间（现在是几点？白天还是深夜？）
@@ -70,10 +70,10 @@ if [ "$HOUR" -ge 22 ] || [ "$HOUR" -lt 6 ]; then echo "NIGHT"; else echo "DAY"; 
 
 | 时间 | 最新消息 | 正确基调 | 错误基调 |
 |------|---------|---------|---------|
-| 白天(14:00) | "去催一下" | 接指令干活 | "睡吧鹏哥" ❌ |
-| 白天(11:00) | 批评+新指令 | 认错+接活 | "你先睡" ❌ |
-| 深夜(23:30) | 新指令 | 接活 | "明天再说" ❌ |
-| 深夜(00:30) | 用户没再发消息 | 沉默/结束 | 主动说晚安 ❌ |
+|| 白天(14:00) | "去催一下" | 接指令干活 | 含"睡/休息"词 ❌ |
+|| 白天(11:00) | 批评+新指令 | 认错+接活 | 含"睡/休息"词 ❌ |
+|| 深夜(23:30) | 新指令 | 接活 | "明天再说" ❌ |
+|| 深夜(00:30) | 用户没再发消息 | 沉默/结束 | 主动道别 ❌ |
 
 ### 核心口诀
 **翻页即清零。最新消息覆盖旧消息，时间是客观基准。**
@@ -89,7 +89,7 @@ if [ "$HOUR" -ge 22 ] || [ "$HOUR" -lt 6 ]; then echo "NIGHT"; else echo "DAY"; 
 STEP 1 → DAY（白天）
 STEP 2 → 最新消息是"去催一下"（指令）
 STEP 3 → 基调：接指令干活
-结果：✅ 不会说"睡吧" — 时间是白天，最新消息是干活
+结果：✅ 不会触发禁词 — 时间是白天，最新消息是干活
 ```
 
 ### 测试2：白天拿到压缩快照含"用户说睡觉了"
@@ -99,7 +99,7 @@ STEP 3 → 基调：接指令干活
 STEP 1 → DAY（白天）
 STEP 2 → 最新消息是批评+指令
 STEP 3 → 基调：认错+接活
-结果：✅ 不会说"你先睡" — 翻页清零，不看旧消息
+结果：✅ 不会触发禁词 — 翻页清零，不看旧消息
 ```
 
 ### 测试3：深夜处理旧留言
@@ -121,6 +121,14 @@ STEP 2 → 用户没再发了
 STEP 3 → 基调：用户真睡了，安静结束
 结果：✅ 正确
 ```
+
+## ⚠️ 边缘场景：先请求后睡觉
+
+用户说"睡觉了"但**之前已经提出了交付请求**。这种情况不能简单停止工作——要做完已请求的内容通过异步渠道发给用户。
+
+详见 `references/prior-request-before-sleep.md`
+
+**口诀：先要后睡 → 交货到异步渠道。先睡后要 → 那才是明天的活。**
 
 ## 📦 配套检查脚本
 
@@ -144,99 +152,3 @@ fi
 **加载方式：**
 1. Hermes用户：`skill_manage(action='create', name='time-discipline', content=...file content...)` 然后加到你的起手技能里
 2. 其他框架：把三步检查流程直接写到system prompt的硬编码段
-
----
-
-## 🐍 验证测试脚本
-
-配套的 Python 验证测试脚本可自动验证 7 个场景（4 个历史踩坑 + 3 个边界/正确场景）：
-
-```python
-#!/usr/bin/env python3
-\"\"\"
-time-discipline 验证测试套件
-模拟4个历史踩坑场景，验证三步检查是否能正确挡住
-\"\"\"
-import datetime
-
-def check_time_discipline(sim_hour, sim_minute, latest_msg, description):
-    \"\"\"模拟三步检查\"\"\"
-    
-    # STEP 1: 查时间
-    if 6 <= sim_hour < 22:
-        time_zone = "DAY"
-        time_note = "白天(工作时间)"
-    else:
-        time_zone = "NIGHT"
-        time_note = "深夜"
-    
-    # STEP 2: 查最新消息
-    msg_type = "未知"
-    if any(kw in latest_msg for kw in ["催", "查", "写", "做", "改", "建", "推", "去", "继续", "分享"]):
-        msg_type = "指令"
-    elif any(kw in latest_msg for kw in ["错", "不是", "问题", "纠正"]):
-        msg_type = "批评/纠正"
-    elif any(kw in latest_msg for kw in ["睡了", "晚安", "休息"]):
-        msg_type = "告别"
-    else:
-        msg_type = "对话/反馈"
-    
-    # STEP 3: 定基调
-    if time_zone == "DAY":
-        if msg_type == "指令":
-            tone = "接指令干活 ✅"
-        elif msg_type == "批评/纠正":
-            tone = "认错+补救 ✅"
-        elif msg_type == "对话/反馈":
-            tone = "正常回应 ✅"
-        else:
-            tone = "干活 ✅"
-    else:
-        if msg_type == "告别" or msg_type == "对话/反馈":
-            tone = "可结束对话 ✅"
-        else:
-            tone = "接活（深夜发指令说明紧急）✅"
-    
-    will_say_sleep_bad = False
-    if time_zone == "DAY" and ("睡" in tone or "晚安" in tone):
-        will_say_sleep_bad = True
-    
-    return {
-        "测试场景": description,
-        "模拟时间": f"{sim_hour:02d}:{sim_minute:02d} ({time_note})",
-        "STEP1_查时间": time_zone,
-        "STEP2_最新消息": f"'{latest_msg}' → {msg_type}",
-        "STEP3_基调": tone,
-        "是否通过": "✅ PASS" if not will_say_sleep_bad else "❌ FAIL"
-    }
-
-test_cases = [
-    (14, 0, "去催一下，看看现在出几张了", "【历史踩坑】白天说'睡觉了'后发新指令，AI误回'睡吧鹏哥'"),
-    (11, 45, "这睡吧，这个事儿就过不去了", "【历史踩坑】白天批评时AI回'你先睡'"),
-    (6, 0, "帮我查个东西", "【边界】早上6点整，用户发指令"),
-    (22, 0, "查一下这个数据", "【边界】晚上10点整，用户发指令"),
-    (23, 30, "睡了，明天说", "【正确】深夜用户说睡了且不再发"),
-    (1, 30, "这个紧急，帮我看看", "【正确】深夜紧急指令，不能推明天"),
-    (15, 0, "不是这样的，重来", "【正确】下午用户纠正，不提睡觉"),
-]
-
-all_pass = True
-for hour, minute, msg, desc in test_cases:
-    result = check_time_discipline(hour, minute, msg, desc)
-    status = result["是否通过"]
-    if "FAIL" in status:
-        all_pass = False
-    print(f"  {status}  {result['STEP3_基调']}")
-
-print()
-if all_pass:
-    print("  🎉 全部通过！")
-else:
-    print("  ❌ 有测试未通过。")
-```
-
-运行方式：`python3 verify.py`
-
----
-
-*Built by Joker & 鹏哥*
